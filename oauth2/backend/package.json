@@ -1,0 +1,21 @@
+{
+  "name": "oauth2-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared BFF (backend-for-frontend) that all three UIs talk to. Owns the OAuth2 / OIDC flow against AWS Cognito.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.716.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jose": "^5.9.6"
+  }
+}
