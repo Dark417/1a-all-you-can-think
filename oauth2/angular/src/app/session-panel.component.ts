@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 
 @Component({
@@ -52,7 +52,8 @@ export class SessionPanelComponent {
 
   constructor() {
     effect(() => this.countdown.set(this.auth.session()?.token.expiresInSeconds ?? 0));
-    setInterval(() => this.countdown.update((c) => Math.max(0, c - 1)), 1000);
+    const ticker = setInterval(() => this.countdown.update((c) => Math.max(0, c - 1)), 1000);
+    inject(DestroyRef).onDestroy(() => clearInterval(ticker));
   }
 
   async refresh(): Promise<void> {
