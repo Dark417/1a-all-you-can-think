@@ -82,7 +82,16 @@ export const config = {
   },
 };
 
-export const allowedOrigins = Object.values(config.apps).map((a) => a.origin);
+/**
+ * CORS allow-list: the three UIs, plus this backend's own origin.
+ *
+ * The self-origin entry matters: the mock IdP's login form posts back to this
+ * same server, and browsers attach an `Origin` header to every POST navigation
+ * - including same-origin ones. Without it that form submission is rejected.
+ */
+export const allowedOrigins = [
+  ...new Set([...Object.values(config.apps).map((a) => a.origin), config.baseUrl]),
+];
 
 export const isMock = () => config.authMode === 'mock';
 

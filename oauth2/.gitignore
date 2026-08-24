@@ -1,9 +1,18 @@
 node_modules/
+
+# build output
 dist/
 build/
 .next/
+out-tsc/
 .angular/
+
+# generated
+next-env.d.ts
+
+# local config and logs
 .env
 .env.local
 *.log
 .DS_Store
+*.tsbuildinfo

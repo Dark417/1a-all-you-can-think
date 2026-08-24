@@ -110,6 +110,7 @@ function loginPage({ query, error }) {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign in - Mock Cognito</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff9900'/%3E%3Cpath d='M11 14v-2.5a5 5 0 0 1 10 0V14h1.2v9.5H9.8V14H11zm2 0h6v-2.5a3 3 0 0 0-6 0V14z' fill='%2316191f'/%3E%3C/svg%3E">
 <style>
   :root { color-scheme: light dark; --fg:#0f172a; --bg:#f1f5f9; --card:#fff; --line:#cbd5e1; --accent:#ff9900; }
   @media (prefers-color-scheme: dark){ :root{ --fg:#e2e8f0; --bg:#0b1220; --card:#131c31; --line:#334155; } }

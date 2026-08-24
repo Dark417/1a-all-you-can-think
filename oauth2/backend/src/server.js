@@ -71,7 +71,7 @@ function banner() {
     `  auth mode       ->  ${config.authMode}${isMock() ? '  (no AWS account needed)' : ''}`,
     `  issuer          ->  ${m.issuer}`,
     `  redirect uri    ->  ${redirectUri()}${isMock() ? '' : '   <- register this in Cognito'}`,
-    `  allowed uis     ->  ${allowedOrigins.join('  ')}`,
+    `  allowed uis     ->  ${allowedOrigins.filter((o) => o !== config.baseUrl).join('  ')}`,
   ];
   if (isMock()) lines.push('  mock users      ->  alice / Password1!  (admin),  bob / Password1!  (viewer)');
   lines.push('');
