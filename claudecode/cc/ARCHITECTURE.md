@@ -38,6 +38,20 @@ the model sees, executing what the model asks for, deciding what it is *allowed*
 to ask for, and keeping the whole thing inside a finite context window. Every
 subsystem below is one of those four jobs.
 
+```mermaid
+flowchart LR
+    U[user prompt] --> A[assemble context]
+    A --> C[call Claude]
+    C --> D{tool_use<br/>blocks?}
+    D -- no --> R[final answer]
+    D -- yes --> G[permission gate<br/>rules · hooks · sandbox]
+    G -- denied --> E[is_error result]
+    G -- allowed --> X[execute tools<br/>in parallel]
+    X --> T[tool results<br/>one user message]
+    E --> T
+    T --> A
+```
+
 ## 2. Anatomy
 
 | Layer | What it does | cc-1 equivalent |
@@ -53,6 +67,27 @@ subsystem below is one of those four jobs.
 | Memory (CLAUDE.md, auto-memory) | durable knowledge across sessions | `memory.py` |
 | Sessions | JSONL transcripts, resume/continue | `session.py` |
 | Skills / slash commands | packaged instructions loaded on demand | (not modeled) |
+
+```mermaid
+flowchart TB
+    subgraph Surfaces
+        TUI[CLI / TUI] ; IDE[IDE ext] ; WEB[web] ; SDK[Agent SDK]
+    end
+    subgraph Harness
+        LOOP[agent loop]
+        CTX[context assembly] ; CMP[compaction]
+        TOOLS[tools] ; PERM[permissions + hooks + sandbox]
+        MCP[MCP client] ; SUB[subagents / Task]
+        MEM[memory] ; SES[sessions JSONL] ; SK[skills / commands]
+    end
+    API[(Claude API)]
+    TUI & IDE & WEB & SDK --> LOOP
+    LOOP --> CTX --> API --> LOOP
+    CTX --> CMP ; CTX --> MEM ; CTX --> SK
+    LOOP --> PERM --> TOOLS
+    TOOLS --> MCP ; TOOLS --> SUB
+    LOOP --> SES
+```
 
 ## 3. Context engineering
 
@@ -75,6 +110,20 @@ file costs more than the entire system prompt — which is why the tools
 truncate output, why `Read` has offset/limit, and why the guidance to the model
 is "search, don't dump."
 
+```mermaid
+flowchart TB
+    subgraph W["context window (one request)"]
+        direction TB
+        S1["1 · system prompt  — stable, cache breakpoint"]
+        S2["2 · environment  — cwd, git, platform, date"]
+        S3["3 · memory  — enterprise → user → repo → subdir CLAUDE.md"]
+        S4["4 · dynamic  — skills, @file, hook output"]
+        S5["5 · history  — turns + tool results, newest last"]
+        S1 --> S2 --> S3 --> S4 --> S5
+    end
+    S5 -. dominates the budget .-> B[(tool results)]
+```
+
 ## 4. Compaction and the context lifecycle
 
 When the conversation approaches the window limit, Claude Code **compacts**: it
@@ -91,6 +140,23 @@ asks the model to summarize the older conversation, then rebuilds history as
 `cc-1` implements the same triple: threshold trigger, summarize-the-old,
 keep-recent-verbatim (`compaction.py`), with the same "write it to memory
 first" pressure valve (`memory.py`).
+
+```mermaid
+sequenceDiagram
+    participant L as agent loop
+    participant H as history
+    participant M as Claude
+    L->>H: measure tokens
+    alt below threshold
+        L->>M: request (full history)
+    else near window limit
+        Note over H: microcompact: clear/shrink oldest tool results first
+        L->>M: summarize older turns
+        M-->>L: summary
+        L->>H: rebuild = [summary] + [recent turns verbatim]
+        L->>M: request (compacted history)
+    end
+```
 
 ## 5. Tools
 
@@ -123,6 +189,19 @@ Every tool call passes a gate before executing:
 `cc-1` models the first layer only (a `PermissionPolicy` with auto/readonly/
 allowlist modes, a workspace jail, and a binary allowlist for the shell).
 
+```mermaid
+flowchart LR
+    TC[tool_use] --> H1[PreToolUse hook]
+    H1 -- block --> ERR[is_error result]
+    H1 -- allow / rewrite --> RULES{settings.json<br/>allow · ask · deny}
+    RULES -- deny --> ERR
+    RULES -- ask --> USER{user prompt}
+    USER -- no --> ERR
+    USER -- yes --> SB[sandbox<br/>fs + network fence]
+    RULES -- allow --> SB
+    SB --> RUN[execute] --> H2[PostToolUse hook] --> RES[tool result]
+```
+
 ## 6. Subagents and orchestration
 
 The `Task` tool spawns a **subagent**: a fresh agent loop with its own clean
@@ -144,6 +223,17 @@ Why this is the scaling mechanism:
 and tool surfaces, parent/child records, depth cap, summarized returns —
 plus a UI that draws the tree live.
 
+```mermaid
+flowchart TB
+    P["parent loop<br/>(full conversation)"]
+    P -- "Task(brief)" --> C1["child A · Explore<br/>own window, own tools"]
+    P -- "Task(brief)" --> C2["child B · general-purpose<br/>own window, own tools"]
+    C1 -- "final report only" --> P
+    C2 -- "final report only" --> P
+    C1 -. "cannot spawn" .-x G[grandchild]
+    style G stroke-dasharray: 5 5
+```
+
 ## 7. MCP
 
 Model Context Protocol servers extend the tool surface with tools the harness
@@ -157,6 +247,22 @@ tools to other MCP clients.
 `cc-1` implements the client and two stdio servers from bare JSON-RPC
 (`mcp/protocol.py`) — about 150 lines total, which is a good way to see that
 MCP is a small protocol with a big ecosystem.
+
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code (MCP client)
+    participant S as MCP server (stdio / SSE / HTTP)
+    participant M as Claude
+    CC->>S: initialize
+    S-->>CC: capabilities
+    CC->>S: tools/list
+    S-->>CC: [tool schemas]
+    Note over CC,M: exposed as mcp__server__tool beside built-ins
+    M->>CC: tool_use mcp__server__tool
+    CC->>S: tools/call
+    S-->>CC: result
+    CC-->>M: tool result
+```
 
 ## 8. Memory
 
@@ -180,6 +286,15 @@ UI, `claude --print` scripting mode, and post-hoc debugging all read the same
 story. `cc-1/session.py` copies this: `events.jsonl` is authoritative,
 `state.json` is a derived snapshot, resume carries notes — not raw history —
 forward.
+
+```mermaid
+flowchart LR
+    T[(events.jsonl<br/>append-only transcript)]
+    LOOP[agent loop] -- every turn --> T
+    T --> R1["--continue / --resume"]
+    T --> R2["web UI · --print · debugging"]
+    T -. derived .-> ST[state.json snapshot]
+```
 
 ## 10. Planning modes
 
