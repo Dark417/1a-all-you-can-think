@@ -1,0 +1,5 @@
+# Core harness: stdlib only. These are for the optional surfaces.
+anthropic>=1.0.0        # providers.py: Anthropic API + Bedrock (Mantle) clients
+fastapi>=0.115          # server.py: HTTP/SSE bridge for the UI
+uvicorn[standard]>=0.30 # server.py
+pytest>=8               # the playground project's test suite (agents run it)

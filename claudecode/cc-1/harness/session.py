@@ -54,7 +54,12 @@ class Session:
 
     def update(self, **fields: Any) -> None:
         self.state.update(fields)
-        (self.dir / "state.json").write_text(json.dumps(self.state, indent=2, ensure_ascii=False))
+        # Atomic write: the UI's SSE thread reads this file concurrently, and a
+        # plain write_text lets it observe a half-written (torn) JSON file.
+        target = self.dir / "state.json"
+        tmp = target.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(self.state, indent=2, ensure_ascii=False))
+        tmp.replace(target)
 
     def close(self) -> None:
         self._events_file.close()
@@ -79,7 +84,12 @@ class SessionStore:
 
     def load_state(self, session_id: str) -> dict[str, Any] | None:
         state_file = self.root / session_id / "state.json"
-        return json.loads(state_file.read_text()) if state_file.exists() else None
+        if not state_file.exists():
+            return None
+        try:
+            return json.loads(state_file.read_text())
+        except json.JSONDecodeError:
+            return None  # caller retries; never let a torn read propagate
 
     def load_events(self, session_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
         events_file = self.root / session_id / "events.jsonl"
