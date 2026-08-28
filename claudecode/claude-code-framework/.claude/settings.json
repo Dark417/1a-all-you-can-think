@@ -1,0 +1,43 @@
+{
+  "$schema": "https://code.claude.com/settings-schema.json",
+
+  "permissions": {
+    "allow": [
+      "Read(*)",
+      "Grep(*)",
+      "Glob(*)",
+      "WebFetch(*)",
+      "WebSearch(*)"
+    ],
+    "deny": []
+  },
+
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-5-20250929"
+  },
+
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/brave-search-mcp-server"],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY_HERE"
+      }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_GITHUB_PAT_HERE"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+# Codex CLI config used ONLY when CODEX_USE_OPENROUTER=true (CODEX_HOME points here).
+# OpenRouter is OpenAI-compatible, so it plugs in as a custom model provider.
+
+model = "poolside/laguna-s-2.1:free"
+model_provider = "openrouter"
+
+[features]
+plugins = false     # otherwise every `codex exec` clones the plugin marketplace (~55 MB) into .tmp/
+memories = false    # pure chat: don't persist cross-session memories
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+env_key = "OPENROUTER_API_KEY"   # read from the environment, never stored here
+wire_api = "responses"           # Codex >= 0.9x only speaks the Responses API; OpenRouter serves /responses too

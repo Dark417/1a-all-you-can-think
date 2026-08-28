@@ -1,0 +1,5 @@
+{"id": "react_vs_plan", "question": "What's the difference between ReAct and Plan-and-Execute?", "must_include": ["plan", "execute", "ReAct"], "tool_expected": "search_knowledge_base"}
+{"id": "rag_first_steps", "question": "I'm building a 'chat with my docs' feature. What's the simplest architecture?", "must_include": ["RAG", "rerank"], "tool_expected": "search_knowledge_base"}
+{"id": "mcp_what", "question": "What is MCP and when should I use it instead of raw tool calling?", "must_include": ["Model Context Protocol", "server"], "tool_expected": "search_knowledge_base"}
+{"id": "support_arch", "question": "Recommend an architecture for a customer-support chat bot.", "must_include": ["RAG", "router"], "tool_expected": "search_knowledge_base"}
+{"id": "save_note", "question": "Please remember that I prefer Postgres + pgvector for vector storage.", "must_include": ["saved"], "tool_expected": "save_note"}

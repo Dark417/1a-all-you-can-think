@@ -1,0 +1,4 @@
+:root { --bg:#0f1115; --panel:#181b22; --me:#2b5cff; --bot:#262a33; --fg:#e8eaf0; --muted:#8a90a0; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }

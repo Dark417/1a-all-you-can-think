@@ -1,0 +1,24 @@
+# secrets — never commit
+.env
+*/.env
+**/.env
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# node / angular
+node_modules/
+dist/
+.angular/
+
+# runtime state written by the CLIs
+04-angular-agent-sdks/backend-codex/codex-home/*
+!04-angular-agent-sdks/backend-codex/codex-home/config.toml
+04-angular-agent-sdks/backend-claude/sandbox/
+04-angular-agent-sdks/backend-codex/sandbox/*
+!04-angular-agent-sdks/backend-codex/sandbox/AGENTS.md

@@ -1,0 +1,16 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# local runtime data — index, notes, traces
+data/chroma/
+data/notes.sqlite
+data/notes.sqlite-journal
+data/traces/
