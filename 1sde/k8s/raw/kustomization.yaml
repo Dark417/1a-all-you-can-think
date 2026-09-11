@@ -1,0 +1,29 @@
+# Kustomize ties these manifests into one applicable unit:
+#     kubectl apply -k k8s/raw
+#
+# The eks/ and gke/ folders are Kustomize *overlays* that reference this folder
+# as their base and patch it for the cloud (StorageClass, Ingress class,
+# Service type, IAM-annotated ServiceAccount), so the app definition stays DRY.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: guestbook
+
+resources:
+  - 00-namespace.yaml
+  - 05-resourcequota-limitrange.yaml
+  - 10-mongo.yaml
+  - 20-app-config.yaml
+  - 22-app-deployment.yaml
+  - 23-app-service.yaml
+  - 24-app-hpa.yaml
+  - 25-app-ingress.yaml
+  - 30-network-policy.yaml
+  - 40-jobs.yaml
+
+# Common labels stamped onto every object (great for `kubectl get all -l ...`).
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: guestbook
+      demo: kubernetes-mongodb

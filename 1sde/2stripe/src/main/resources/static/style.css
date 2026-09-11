@@ -1,0 +1,100 @@
+:root {
+  --fg: #1d1d1f;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #635bff;
+  --bg: #fafafa;
+  --ok: #047857;
+  --warn: #b45309;
+  --err: #b91c1c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 2rem 1rem;
+}
+
+main { max-width: 640px; margin: 0 auto; }
+
+h1 { margin: 0 0 0.5rem; }
+h2 { margin: 2rem 0 0.5rem; }
+
+.muted, code { color: var(--muted); }
+code { background: #f1f1f3; padding: 1px 4px; border-radius: 3px; }
+
+a { color: var(--accent); }
+
+#config-warning {
+  display: block;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: var(--warn);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+form {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+
+label {
+  display: block;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  margin-top: 0.25rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+}
+
+#payment-element { margin: 1rem 0; }
+
+button {
+  background: var(--accent);
+  color: white;
+  border: 0;
+  padding: 0.6rem 1rem;
+  font: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button[type="button"] { background: transparent; color: var(--accent); padding: 2px 6px; }
+
+#result { margin: 0.75rem 0 0; font-weight: 500; }
+#result.ok  { color: var(--ok); }
+#result.err { color: var(--err); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
+th { background: #f9fafb; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+
+details { margin: 1.5rem 0; color: var(--muted); }
+details code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

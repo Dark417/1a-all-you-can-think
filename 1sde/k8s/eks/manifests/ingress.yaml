@@ -1,0 +1,82 @@
+# =============================================================================
+# Ingress patch -- replace the nginx ingress with an AWS ALB.
+#
+# HOW this patch works:
+#   The base Ingress (raw/25-app-ingress.yaml) uses ingressClassName: nginx
+#   and a host of guestbook.localdev.me.  This strategic-merge patch replaces
+#   the entire metadata.annotations block and the spec, keeping the same
+#   resource name so Kustomize knows which object to merge into.
+#
+# AWS Load Balancer Controller:
+#   When it sees an Ingress with ingressClassName: alb it calls the ELB API
+#   to create an Application Load Balancer (layer-7 HTTP/S).  The ALB lives
+#   OUTSIDE the cluster in the public subnets, making it reachable from the
+#   internet.  The ALB health-checks target pods directly (target-type: ip)
+#   using the Pod IP addresses that VPC CNI assigns -- no NodePort hop needed.
+#
+# Key annotations explained:
+#   scheme: internet-facing        -- public ALB (vs. internal for intra-VPC only)
+#   target-type: ip                -- register Pod IPs as targets (requires VPC CNI)
+#   healthcheck-path: /healthz     -- the app's liveness endpoint (no Mongo dep)
+#   listen-ports: '[{"HTTP":80}]'  -- ALB listener ports
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guestbook        # MUST match the base Ingress name for the patch to apply
+  namespace: guestbook
+  annotations:
+    # -------------------------------------------------------------------------
+    # AWS Load Balancer Controller annotations.
+    # (The nginx-only rewrite-target annotation inherited from the base is
+    #  stripped by a JSON6902 remove op in kustomization.yaml.)
+    # Full reference:
+    #   https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/ingress/annotations/
+    # -------------------------------------------------------------------------
+
+    # Create an internet-facing ALB in the public subnets.
+    # Use "internal" here for private (VPC-only) access.
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # Register Pod IPs directly as ALB targets instead of NodePort.
+    # Requires: VPC CNI (pods have real VPC IPs) -- standard on EKS.
+    # Benefits: one fewer network hop, better latency, no port exhaustion.
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # ALB health-check path. We use /healthz (liveness -- no Mongo dependency)
+    # so the ALB doesn't mark a Pod unhealthy just because Mongo is slow.
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+
+    # HTTP on port 80. To add HTTPS add {"HTTPS":443} and set the certificate ARN:
+    #   alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/ID
+    #   alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+
+    # Enable access logs to S3 for audit and troubleshooting (optional).
+    # alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket=TODO-bucket
+
+    # Tag the ALB for cost allocation / resource grouping.
+    alb.ingress.kubernetes.io/tags: project=guestbook,env=demo
+
+    # Idle timeout: how long the ALB keeps an idle connection open (seconds).
+    # Default is 60s; increase for long-running API calls or WebSockets.
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+spec:
+  # ingressClassName: alb tells the AWS Load Balancer Controller to own this Ingress.
+  # The base uses "nginx"; this patch replaces it with "alb".
+  ingressClassName: alb
+  rules:
+    # On AWS the ALB is addressed by its auto-generated DNS name
+    # (e.g. k8s-guestbook-XXXXXX.us-east-1.elb.amazonaws.com).
+    # We leave host empty here so the ALB accepts requests on any hostname,
+    # which makes it work immediately after provisioning without DNS setup.
+    # For production: set host to your domain and configure Route 53.
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: guestbook
+                port:
+                  number: 80

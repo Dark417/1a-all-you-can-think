@@ -1,0 +1,10 @@
+# Spark 4.0 officially supports Java 17 and 21 (bundles Arrow 18, which works on
+# Java 21 — Spark 3.5's bundled Arrow 12 does not). The [sql,ml] extras pull
+# pandas/pyarrow/numpy used by the DataFrame, pandas-UDF, and MLlib demos.
+pyspark[sql,ml]==4.0.0
+pandas>=2.0
+pyarrow>=15.0
+numpy>=1.23
+
+# Testing
+pytest>=8.0.0

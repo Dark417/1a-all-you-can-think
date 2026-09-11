@@ -4,3 +4,46 @@ apis
 
 # nested clone of external repo
 mcp/mcp/context7/
+
+# Python virtual environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node dependencies and build output
+node_modules/
+dist/
+build/
+.angular/
+.nx/
+
+# Nested clones of external/standalone repos (they keep their own git history)
+1sde/0databricks/1sde-edgar-01-contracts/
+1sde/0databricks/1sde-edgar-02-infra/
+1sde/0databricks/1sde-edgar-03-ingest/
+1sde/0databricks/1sde-edgar-04-pipelines/
+1sde/0databricks/1sde-edgar-05-serving/
+1sde/0databricks/1sde-edgar-06-chatbot/
+1sde/2angular/
+
+# Vendored runtimes downloaded by setup scripts, not source
+1sde/0databricks/2.spark/jdk/
+1sde/0databricks/2.spark/hadoop/
+
+# Spark job output
+out/
+*.parquet
+*.crc
+
+# Tooling scratch artifacts
+.playwright-cli/
+
+# Generated datasets (recreate with 2.spark/generate_data.py, seeded)
+1sde/0databricks/2.spark/data/
+# Vendored JDBC driver, documented in 2.spark/README.md
+1sde/0databricks/2.spark/jars/

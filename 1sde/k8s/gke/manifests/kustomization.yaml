@@ -1,0 +1,106 @@
+# =============================================================================
+# GKE Kustomize Overlay
+#
+# This overlay references the vanilla manifests in k8s/raw/ as its base and
+# layers on the GCP-specific changes needed to run on GKE:
+#
+#   1. Image tag → Artifact Registry path (so GKE nodes pull from AR, not
+#      local Docker).
+#   2. StorageClass → pd-balanced PD (instead of whatever the base default is).
+#   3. MongoDB volumeClaimTemplate → uses the new StorageClass.
+#   4. Ingress → GCE L7 HTTP(S) Load Balancer (instead of ingress-nginx).
+#   5. BackendConfig → wires the GCE health check to /healthz.
+#   6. Service annotation → links the Service to the BackendConfig.
+#   7. ServiceAccount annotation → Workload Identity GSA binding.
+#
+# Apply with:
+#   kubectl apply -k k8s/gke/manifests
+# (Kustomize is built into kubectl >= 1.14; no separate install needed.)
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: guestbook
+
+# ---------------------------------------------------------------------------
+# Base: all vanilla manifests from k8s/raw/.
+# Kustomize merges these with the resources and patches listed below.
+# ---------------------------------------------------------------------------
+resources:
+  - ../../raw          # pulls in all resources listed in raw/kustomization.yaml
+  - storageclass.yaml  # adds the pd-balanced StorageClass (GKE-specific)
+  - ingress.yaml       # adds BackendConfig + patches Ingress for GCE LB
+
+# ---------------------------------------------------------------------------
+# Image substitution: swap the local image name for the Artifact Registry URL.
+# The `newTag` is kept separate from `newName` so bumping a version only
+# requires changing one line.
+# ---------------------------------------------------------------------------
+images:
+  - name: guestbook              # matches `image: guestbook:1.0.0` in the base
+    # TODO: replace these placeholders with your actual project and region.
+    newName: us-central1-docker.pkg.dev/YOUR_PROJECT_ID/guestbook/guestbook
+    newTag: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Patches (strategic merge + JSON6902 targets):
+#
+# Modern Kustomize uses the `patches:` list with explicit `target:` selectors
+# instead of the older `patchesStrategicMerge` / `patchesJson6902` fields,
+# which are deprecated since Kustomize v5.
+# ---------------------------------------------------------------------------
+patches:
+  # ── ServiceAccount: Workload Identity annotation ──────────────────────────
+  # Annotates the guestbook-app KSA so GKE can federate its token to the GSA.
+  - path: serviceaccount-patch.yaml
+    target:
+      kind: ServiceAccount
+      name: guestbook-app
+
+  # ── MongoDB StatefulSet: switch to pd-balanced StorageClass ───────────────
+  # The base volumeClaimTemplate has no storageClassName (uses cluster default).
+  # On GKE the default is pd-standard (HDD). We upgrade to pd-balanced (SSD)
+  # for better IOPS at minimal extra cost.
+  - target:
+      kind: StatefulSet
+      name: mongo
+    patch: |
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: pd-balanced
+
+  # ── Service: add BackendConfig annotation ─────────────────────────────────
+  # The cloud.google.com/backend-config annotation tells the GKE Ingress
+  # controller which BackendConfig to use for this Service's backend.
+  - target:
+      kind: Service
+      name: guestbook
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          cloud.google.com/backend-config: '{"default": "guestbook-backend-config"}'
+
+  # ── Ingress: retarget the base (nginx) Ingress to the GCE load balancer ────
+  # The base Ingress/guestbook is patched in place (we must NOT redeclare it as
+  # a resource — Kustomize forbids duplicate ids). This swaps the class to gce,
+  # drops the nginx-only rewrite annotation, and sets the host.
+  - target:
+      kind: Ingress
+      name: guestbook
+    patch: |
+      - op: replace
+        path: /spec/ingressClassName
+        value: gce
+      - op: remove
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1rewrite-target
+      - op: add
+        path: /metadata/annotations/kubernetes.io~1ingress.class
+        value: "gce"
+      # TODO: replace with your domain, or guestbook.<LB_IP>.nip.io after the LB is up.
+      - op: replace
+        path: /spec/rules/0/host
+        value: guestbook.example.com
+
+# Common labels are inherited from the base kustomization.yaml; no need to
+# re-declare them here unless you want to add GKE-specific labels.

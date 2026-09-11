@@ -1,0 +1,45 @@
+# =============================================================================
+# StorageClass: gp3 via the EBS CSI driver.
+#
+# WHY gp3 instead of gp2?
+#   gp3 is the current-generation AWS EBS volume type. It gives you:
+#     * Baseline: 3,000 IOPS and 125 MiB/s throughput at NO extra cost.
+#     * Cheaper: ~20% lower price per GB than gp2.
+#     * Independent scaling: IOPS and throughput can be set independently
+#       (gp2 tied IOPS to volume size, forcing over-provisioning).
+#
+# WHY set this as default?
+#   Kubernetes picks the "default" StorageClass when a PVC doesn't name one.
+#   The base manifests in raw/ request 1Gi without specifying a StorageClass,
+#   so making this the default means MongoDB's PVC automatically gets a gp3
+#   volume without changing the base manifest at all -- the overlay wins.
+#
+# WHY ebs.csi.aws.com provisioner (not kubernetes.io/aws-ebs)?
+#   The in-tree aws-ebs provisioner is DEPRECATED as of Kubernetes 1.23 and
+#   removed in 1.27+. The EBS CSI driver (an add-on we install on the cluster)
+#   is the supported replacement and is required for gp3 volumes.
+# =============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    # Mark as default so any PVC without a storageClassName gets this class.
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  # gp3 is the volume type; alternatives: io1/io2 (provisioned IOPS), sc1 (cold HDD).
+  type: gp3
+  # Enable EBS encryption at rest using the AWS-managed key for EBS.
+  # Switch to a customer-managed KMS key ARN for stricter key control.
+  encrypted: "true"
+  # Filesystem type. ext4 is the default and well-supported.
+  # xfs is preferred for high-throughput MongoDB workloads (better allocation).
+  csi.storage.k8s.io/fstype: ext4
+# WaitForFirstConsumer: the volume is created in the SAME AZ as the Pod that
+# claims it. Without this (Immediate), the volume might be created in AZ-A but
+# the Pod scheduled to AZ-B, and the attach would fail (EBS is AZ-scoped).
+volumeBindingMode: WaitForFirstConsumer
+# Allow PVCs using this class to be expanded online (no downtime resize).
+allowVolumeExpansion: true
+reclaimPolicy: Delete  # Delete the EBS volume when the PVC is removed.

@@ -1,0 +1,51 @@
+# --- NetworkPolicy: micro-segmentation (a Pod-level firewall). ---
+# Default-deny is best practice. These two policies say:
+#   1) deny all ingress to every Pod in the namespace by default, then
+#   2) allow only the app -> mongo:27017 path and ingress-controller -> app:8000.
+#
+# NOTE: NetworkPolicies require a CNI that enforces them (Calico, Cilium, ...).
+# kind's default CNI (kindnet) does NOT, so locally these are illustrative; on
+# EKS (VPC CNI + policy) and GKE (Dataplane V2) they are enforced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: guestbook
+spec:
+  podSelector: {}            # selects every Pod in the namespace
+  policyTypes: ["Ingress"]
+  # no `ingress:` rules => deny all inbound
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-mongo
+  namespace: guestbook
+spec:
+  podSelector:
+    matchLabels: { app: mongo }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: guestbook
+      ports:
+        - protocol: TCP
+          port: 27017
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-app
+  namespace: guestbook
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: guestbook }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: {}     # any namespace (the ingress controller)
+      ports:
+        - protocol: TCP
+          port: 8000

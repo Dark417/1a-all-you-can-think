@@ -1,0 +1,76 @@
+# --- Job: run-to-completion batch work. ---
+# Unlike a Deployment (which keeps Pods running forever), a Job runs its Pod(s)
+# until they succeed, then stops. Here we seed the database with a welcome
+# message using mongosh. `kubectl create job --from=cronjob` and Helm hooks use
+# this same primitive for migrations/seeding.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-guestbook
+  namespace: guestbook
+spec:
+  backoffLimit: 4          # retry up to 4 times before marking the Job failed
+  ttlSecondsAfterFinished: 600   # auto-clean the Job 10 min after completion
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: seed
+          image: mongo:7.0
+          envFrom:
+            - secretRef: { name: app-secret }   # provides MONGODB_URI
+          command:
+            - mongosh
+            - "$(MONGODB_URI)"
+            - "--eval"
+            - >
+              db.messages.insertOne({
+                author: 'system',
+                text: 'Welcome to the guestbook! Seeded by a Kubernetes Job.',
+                created_at: new Date()
+              })
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+---
+# --- CronJob: scheduled Jobs (the Kubernetes equivalent of crontab). ---
+# Every 5 minutes, print how many messages exist. Demonstrates schedule,
+# concurrency policy and history limits.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: count-messages
+  namespace: guestbook
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid      # don't start a run if the previous is still going
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 300
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: counter
+              image: mongo:7.0
+              envFrom:
+                - secretRef: { name: app-secret }
+              command:
+                - mongosh
+                - "$(MONGODB_URI)"
+                - "--quiet"
+                - "--eval"
+                - "print('message count = ' + db.messages.countDocuments({}))"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }

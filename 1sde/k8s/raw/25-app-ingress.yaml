@@ -1,0 +1,28 @@
+# --- Ingress: HTTP routing from outside the cluster to the Service. ---
+# An Ingress is just rules; it needs an Ingress *controller* to implement them.
+# Locally we use ingress-nginx (the kind Makefile installs it). The host
+# `guestbook.localdev.me` resolves to 127.0.0.1 automatically (public wildcard
+# DNS), so no /etc/hosts editing is needed.
+#
+# On EKS this becomes an ALB via the AWS Load Balancer Controller; on GKE it
+# becomes a Google Cloud HTTP(S) Load Balancer. See eks/ and gke/ overlays.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guestbook
+  namespace: guestbook
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: guestbook.localdev.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: guestbook
+                port:
+                  number: 80

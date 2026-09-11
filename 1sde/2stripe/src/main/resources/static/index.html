@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stripe POC — local checkout</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+<main>
+  <h1>Stripe POC</h1>
+  <p class="muted">
+    Local Spring Boot demo. Submits to <code>POST /api/payments/intent</code>,
+    then confirms the PaymentIntent with Stripe.js using a test card.
+    <a href="/swagger-ui.html">Swagger UI</a> · <a href="/h2-console">H2 console</a>
+  </p>
+
+  <section id="config-warning" hidden>
+    <strong>Stripe not configured.</strong> See <code>SETUP.md</code> — put your
+    <code>sk_test_…</code> and <code>pk_test_…</code> in
+    <code>application-local.yml</code> and restart.
+  </section>
+
+  <form id="pay-form">
+    <label>
+      Amount (USD)
+      <input id="amount" type="number" min="0.50" step="0.01" value="19.99" required />
+    </label>
+    <label>
+      Description
+      <input id="description" type="text" maxlength="255" value="Test order" />
+    </label>
+
+    <div id="payment-element"></div>
+
+    <button id="submit" type="submit" disabled>Pay</button>
+    <p id="result" role="status"></p>
+  </form>
+
+  <section>
+    <h2>Recent payments <button id="refresh" type="button">↻</button></h2>
+    <table id="payments">
+      <thead><tr>
+        <th>Created</th><th>Amount</th><th>Currency</th><th>Status</th><th>Stripe id</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <details>
+    <summary>Test cards (Stripe test mode)</summary>
+    <ul>
+      <li><code>4242 4242 4242 4242</code> — succeeds immediately</li>
+      <li><code>4000 0025 0000 3155</code> — requires 3D-Secure authentication</li>
+      <li><code>4000 0000 0000 9995</code> — declined (insufficient funds)</li>
+      <li><code>4000 0000 0000 0002</code> — declined (generic)</li>
+      <li>Use any future expiry, any 3-digit CVC, any ZIP.</li>
+    </ul>
+  </details>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

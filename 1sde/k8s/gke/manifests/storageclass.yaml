@@ -1,0 +1,50 @@
+# =============================================================================
+# GKE StorageClass: pd-balanced
+#
+# WHY a custom StorageClass?
+#   The GKE default StorageClass uses `pd-standard` (standard HDD).  For a
+#   database workload like MongoDB, we want `pd-balanced` (SSD-backed) which
+#   gives ~3× the IOPS at roughly 2× the cost per GiB.
+#
+# GKE PD CSI driver (pd.csi.storage.gke.io) is the current recommended
+# provisioner.  The older `kubernetes.io/gce-pd` in-tree provisioner is
+# deprecated as of Kubernetes 1.23 and will be removed.
+#
+# Disk type options on GKE:
+#   pd-standard  — standard magnetic HDD (~0.04 $/GiB/month)
+#   pd-balanced  — SSD-backed, balanced perf  (~0.10 $/GiB/month)  ← this file
+#   pd-ssd       — high-perf SSD              (~0.17 $/GiB/month)
+#   pd-extreme   — highest IOPS, custom IOPS/throughput, zone-level only
+#   hyperdisk-*  — next-gen block storage (GKE 1.28+, requires specific machine types)
+#
+# volumeBindingMode: WaitForFirstConsumer
+#   The PV is not provisioned until a Pod is actually scheduled.  This ensures
+#   the PD is created in the *same zone* as the node, which is required —
+#   persistent disks are zonal resources and can only attach to nodes in the
+#   same zone.  Without this, the PD might land in a different zone and the
+#   Pod would fail to start.
+#
+# reclaimPolicy: Retain
+#   When a PVC is deleted, the PV (and the underlying PD) is kept rather than
+#   deleted.  This is safer for a production database — you must manually
+#   delete the disk to free the cost, but you won't accidentally lose data.
+#   Change to `Delete` for dev/test environments where cleanup is automatic.
+# =============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pd-balanced
+  annotations:
+    # Mark as the default so any PVC without a storageClassName gets this class.
+    # Remove this annotation if your cluster already has a default you want to keep.
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: pd.csi.storage.gke.io
+parameters:
+  # type selects the underlying PD tier. See the comment block above.
+  type: pd-balanced
+  # replication-type: none = single-zone (cheaper, sufficient for demo).
+  # Use `regional-pd` for multi-zone replication (2× cost, survives zone failure).
+  replication-type: none
+volumeBindingMode: WaitForFirstConsumer   # provision in the Pod's zone
+reclaimPolicy: Retain                      # protect data on PVC deletion
+allowVolumeExpansion: true                 # allow `kubectl patch pvc` to resize

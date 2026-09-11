@@ -1,0 +1,174 @@
+# =============================================================================
+# eksctl ClusterConfig -- declarative EKS cluster provisioning.
+#
+# eksctl is the official CLI for EKS maintained by Weaveworks + AWS. It reads
+# this file and translates it into CloudFormation stacks that create:
+#   * the EKS control plane (managed by AWS -- you don't see the master nodes),
+#   * a VPC with public + private subnets across 3 AZs,
+#   * a managed node group of EC2 workers,
+#   * IAM roles, security groups, and an OIDC provider.
+#
+# Usage:
+#   eksctl create cluster -f k8s/eks/eksctl-cluster.yaml
+#   eksctl delete cluster -f k8s/eks/eksctl-cluster.yaml   # to teardown
+#
+# Replace every value marked TODO before running.
+# =============================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  # TODO: change to your preferred cluster name
+  name: guestbook-eks
+  # TODO: set your target AWS region (e.g. us-east-1, eu-west-1, ap-southeast-1)
+  region: us-east-1
+  # EKS 1.30 is current as of mid-2025. Pin the version to avoid surprise upgrades.
+  # Upgrade path: bump this value, run `eksctl upgrade cluster`, then upgrade node groups.
+  version: "1.30"
+  # Tags propagate to all AWS resources created for this cluster (billing, search).
+  tags:
+    project: guestbook
+    env: demo
+    managed-by: eksctl
+
+# ---------------------------------------------------------------------------
+# VPC layout.
+# eksctl creates a brand-new VPC by default (recommended for isolation).
+# The NAT gateway lets private-subnet worker nodes reach the internet to pull
+# images from ECR without being directly reachable from the internet.
+# ---------------------------------------------------------------------------
+vpc:
+  # NAT=HighlyAvailable creates one NAT GW per AZ: ~$32/mo each.
+  # For a demo, `Single` saves money but loses AZ-level resiliency.
+  nat:
+    gateway: Single   # change to HighlyAvailable for production
+
+# ---------------------------------------------------------------------------
+# Managed Node Group.
+# A managed nodegroup means AWS handles node AMI updates and repairs;
+# you only decide the instance type and scaling bounds.
+# ---------------------------------------------------------------------------
+managedNodeGroups:
+  - name: ng-general
+    # m5.large = 2 vCPU / 8 GB. Good balance of cost and headroom for demos.
+    # For cost savings: t3.medium (burstable, 4 GB) works but limits concurrency.
+    instanceType: m5.large
+    minSize: 2
+    desiredCapacity: 2
+    maxSize: 4
+    # Place workers in private subnets -- they reach ECR via NAT, but no public IP.
+    privateNetworking: true
+    # Encrypted root EBS volume -- good practice, marginal cost impact.
+    volumeSize: 20
+    volumeEncrypted: true
+    # These labels appear on every node; useful for nodeSelector / Taints.
+    labels:
+      role: worker
+      lifecycle: on-demand
+    tags:
+      nodegroup-role: worker
+    # Enable SSM Session Manager so you can shell into nodes without a bastion host.
+    iam:
+      withAddonPolicies:
+        # Attach the AWS-managed SSM policy so you can use `aws ssm start-session`.
+        awsLoadBalancerController: true   # needed by the ALB controller on nodes
+        # EBS CSI driver runs as a DaemonSet but the driver itself uses the node
+        # IAM role for initial volume operations; the real permissions come via IRSA.
+        ebs: true
+        # Cluster Autoscaler reads nodegroup metadata through this policy.
+        autoScaler: true
+
+# ---------------------------------------------------------------------------
+# EKS Managed Add-ons.
+# These run as Pods in kube-system and are patched by AWS independently of
+# your application workloads (security patches land without your involvement).
+# ---------------------------------------------------------------------------
+addons:
+  # VPC CNI: assigns VPC-native IPs to Pods. Each Pod gets a real VPC IP from
+  # the node's ENI, so Pods are directly routable -- no overlay network overhead.
+  - name: vpc-cni
+    version: latest
+    # attachPolicyARNs: grant the CNI role permission to manage ENIs and IPs.
+    attachPolicyARNs:
+      - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+
+  # CoreDNS: in-cluster DNS resolver. Translates `mongo.guestbook.svc.cluster.local`
+  # into the ClusterIP of the mongo Service.
+  - name: coredns
+    version: latest
+
+  # kube-proxy: programs iptables / IPVS rules on every node so Service ClusterIPs
+  # actually route to Pod IPs.
+  - name: kube-proxy
+    version: latest
+
+  # EBS CSI Driver: allows Kubernetes to create/attach/detach AWS EBS volumes.
+  # The base StorageClass (k8s.io/aws-ebs) is deprecated; this add-on is the
+  # supported replacement and enables gp3 volumes (cheaper + faster than gp2).
+  - name: aws-ebs-csi-driver
+    version: latest
+    # The CSI driver needs IAM permission to call ec2:CreateVolume etc.
+    # We use IRSA (see iam.serviceAccounts below) rather than a node-level policy
+    # to follow least-privilege: only the CSI controller SA gets these rights.
+    serviceAccountRoleARN: arn:aws:iam::TODO_ACCOUNT_ID:role/AmazonEKS_EBS_CSI_DriverRole
+    # The role above must exist BEFORE the cluster is created, OR you can omit the
+    # ARN here and create the role with `eksctl create iamserviceaccount` afterward.
+    # See README.md for the exact command.
+
+# ---------------------------------------------------------------------------
+# OIDC Provider.
+# This is the cornerstone of IRSA (IAM Roles for Service Accounts).
+# eksctl creates an IAM OIDC Identity Provider for the cluster's issuer URL,
+# then each `iam.serviceAccounts` entry creates an IAM role with a trust
+# policy that says "this role may only be assumed by a Pod that presents a
+# token signed by *this* cluster's OIDC issuer AND whose service account
+# matches the specified name+namespace".
+# ---------------------------------------------------------------------------
+iam:
+  withOIDC: true    # MUST be true to enable IRSA
+
+  serviceAccounts:
+    # -------------------------------------------------------------------------
+    # IRSA for the guestbook-app ServiceAccount.
+    # The app itself doesn't need many AWS permissions; this entry exists to
+    # illustrate the pattern.  We grant the app read-only access to a single
+    # SSM Parameter (e.g. a feature flag or external connection string) so the
+    # pod can call `aws ssm get-parameter` without any static credentials.
+    #
+    # Extend the inline policy below (or add attachPolicyARNs) if the app needs
+    # S3, Secrets Manager, SQS, etc.
+    # -------------------------------------------------------------------------
+    - metadata:
+        name: guestbook-app          # MUST match the K8s ServiceAccount name
+        namespace: guestbook         # MUST match the K8s namespace
+        # The labels are stamped onto the IAM role for auditability.
+        labels:
+          aws-usage: guestbook-app-irsa
+      # Attach a managed policy for read-only SSM access (illustrative).
+      # Replace with the exact permissions your app needs.
+      attachPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              # Read a single parameter (scoped by name prefix to least-privilege).
+              - ssm:GetParameter
+              - ssm:GetParametersByPath
+            Resource:
+              # TODO: replace ACCOUNT_ID and REGION with real values.
+              # This ARN scopes the permission to /guestbook/* parameters only.
+              - arn:aws:ssm:us-east-1:TODO_ACCOUNT_ID:parameter/guestbook/*
+
+    # -------------------------------------------------------------------------
+    # IRSA for the AWS Load Balancer Controller.
+    # The controller runs in kube-system and manages ALBs on behalf of Ingress
+    # objects. It needs a large IAM policy provided by AWS; we reference it by
+    # URL (you download it once and store in your infra repo).
+    # See README.md for the exact `curl` command to download the policy JSON.
+    # -------------------------------------------------------------------------
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      attachPolicyARNs:
+        # TODO: Create the policy first (see README), then paste the ARN here.
+        - arn:aws:iam::TODO_ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy

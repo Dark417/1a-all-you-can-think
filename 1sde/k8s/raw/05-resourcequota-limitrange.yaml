@@ -1,0 +1,37 @@
+# --- ResourceQuota: a hard cap on aggregate resource use in the Namespace. ---
+# Prevents one team/app from starving the cluster. Pods that would exceed the
+# quota are rejected at admission time.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: guestbook-quota
+  namespace: guestbook
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi
+    pods: "20"
+    persistentvolumeclaims: "5"
+---
+# --- LimitRange: default + bounds for individual containers. ---
+# Containers that omit requests/limits inherit these defaults, so the quota
+# above is always enforceable.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: guestbook-limits
+  namespace: guestbook
+spec:
+  limits:
+    - type: Container
+      default:            # used as `limits` if unset
+        cpu: 250m
+        memory: 256Mi
+      defaultRequest:     # used as `requests` if unset
+        cpu: 100m
+        memory: 128Mi
+      max:
+        cpu: "1"
+        memory: 1Gi

@@ -1,0 +1,30 @@
+# --- Lakehouse storage layer (the centerpiece) ---
+deltalake==1.6.0         # delta-rs: REAL Delta Lake tables on disk, no Spark/JVM
+
+# --- Local query engine (Photon-style "SQL warehouse") ---
+duckdb==1.5.3            # Vectorised OLAP engine; reads Delta via delta_scan()
+
+# --- Dataframe transforms for the medallion / DLT pipelines ---
+polars==1.41.2           # Fast dataframe library used for clean/dedupe/aggregate
+pandas==2.2.3
+pyarrow==18.1.0          # Arrow tables are the unit delta-rs reads/writes
+
+# --- MLflow: experiment tracking + model registry ---
+mlflow==3.13.0           # Real local MLflow (sqlite tracking backend)
+
+# --- API + Swagger UI ---
+fastapi==0.115.6         # Serves the REST API and auto-generates Swagger UI at /docs
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18 # File uploads into the Auto Loader landing zone
+pydantic==2.10.4
+
+# --- Unity Catalog metastore (metadata) ---
+pymongo==4.10.1          # Talks to a real MongoDB (docker-compose) ...
+mongomock==4.3.0         # ... or an in-memory fallback so the demo runs with zero infra
+
+# --- Jobs / Workflows scheduling ---
+APScheduler==3.11.0
+
+# --- Tests ---
+pytest==8.3.4
+httpx==0.28.1            # FastAPI TestClient transport

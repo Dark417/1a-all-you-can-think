@@ -1,0 +1,23 @@
+# --- Service: a stable virtual IP + DNS name in front of the Pods. ---
+# Pods are ephemeral (their IPs change); the Service `guestbook` gives clients a
+# single, stable target and load-balances across all *ready* replicas selected
+# by the label selector.
+#
+# type: ClusterIP = reachable only inside the cluster. External access is via the
+# Ingress (25-app-ingress.yaml). On EKS/GKE you'd often use type: LoadBalancer
+# instead to get a cloud L4 load balancer -- see those overlays.
+apiVersion: v1
+kind: Service
+metadata:
+  name: guestbook
+  namespace: guestbook
+  labels:
+    app.kubernetes.io/name: guestbook
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: guestbook   # routes to Pods carrying this label
+  ports:
+    - name: http
+      port: 80          # the Service port
+      targetPort: http  # the container port (named in the Deployment)

@@ -1,0 +1,23 @@
+# --- Local emulation engine ---
+duckdb==1.5.3            # Columnar OLAP engine that stands in for a Snowflake virtual warehouse
+
+# --- API + Swagger UI ---
+fastapi==0.115.6         # Serves the REST API and auto-generates the Swagger UI at /docs
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18 # File uploads into "stages"
+pydantic==2.10.4
+
+# --- Metadata catalog ---
+pymongo==4.10.1          # Talks to a real MongoDB (docker-compose) ...
+mongomock==4.3.0         # ... or an in-memory fallback so the demo runs with zero infra
+
+# --- Data handling ---
+pandas==2.2.3
+pyarrow==18.1.0          # Parquet I/O used to illustrate micro-partitions
+
+# --- Scheduling for Tasks / Snowpipe ---
+APScheduler==3.11.0
+
+# --- Tests ---
+pytest==8.3.4
+httpx==0.28.1            # FastAPI TestClient transport

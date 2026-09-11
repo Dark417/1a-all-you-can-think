@@ -1,0 +1,58 @@
+# Local stack: MongoDB (Unity Catalog metastore) + the demo API (Swagger UI).
+#
+#   docker compose up --build
+#   open http://localhost:8000/docs        (Swagger UI)
+#   open http://localhost:8081             (Mongo Express, browse the metastore)
+#
+# Prefer no Docker? Just `pip install -r requirements.txt && python demo.py`
+# -- the app falls back to an in-memory mongomock automatically.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: databricks_demo
+      DUCKDB_PATH: ":memory:"
+      # The Delta Lakehouse, MLflow store and Auto Loader stage all live on a
+      # persistent volume so tables survive container restarts.
+      DELTA_DIR: /data/delta
+      STAGE_DIR: /data/stage
+      MLRUNS_DIR: /data/mlruns
+    ports:
+      - "8000:8000"
+    volumes:
+      - api_data:/data
+
+  # Optional: a web UI to inspect the MongoDB metastore.
+  mongo-express:
+    image: mongo-express:1.0.2
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8081:8081"
+
+volumes:
+  mongo_data:
+  api_data:

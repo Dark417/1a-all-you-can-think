@@ -1,0 +1,11 @@
+# Copy this file to application-local.yml (which is gitignored) and fill in.
+# Or set the same values as environment variables — both work.
+
+stripe:
+  # Dashboard → Developers → API keys (toggle "Viewing test data" on)
+  secret-key:       sk_test_REPLACE_ME
+  publishable-key:  pk_test_REPLACE_ME
+
+  # From `stripe listen --forward-to localhost:8080/api/stripe/webhook`
+  # Optional — only needed if you want to test webhook callbacks locally.
+  webhook-secret:   whsec_REPLACE_ME

@@ -1,0 +1,11 @@
+# A Namespace is a virtual cluster -- a scope for names and a boundary for
+# quotas, RBAC and NetworkPolicies. Everything in this demo lives in `guestbook`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guestbook
+  labels:
+    app.kubernetes.io/part-of: guestbook
+    # Opt into the built-in Pod Security Standards "restricted" profile.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

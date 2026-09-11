@@ -1,0 +1,5 @@
+# Runtime artifacts (the root .gitignore already covers data/, mlruns/, *.duckdb).
+# The Auto Loader landing zone collects files at runtime; keep the dir, ignore
+# its contents.
+stage/*
+!stage/.gitkeep

@@ -1,0 +1,92 @@
+# =============================================================================
+# The stateless app as a Deployment.
+#
+# A Deployment manages a ReplicaSet, which manages Pods. It gives you:
+#   * declarative scaling (replicas),
+#   * rolling updates with rollback (revisionHistory),
+#   * self-healing (crashed/deleted Pods are recreated).
+# Because the app keeps NO local state, we can run many identical replicas.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guestbook
+  namespace: guestbook
+  labels:
+    app.kubernetes.io/name: guestbook
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: guestbook
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0          # zero-downtime: never drop below desired count
+      maxSurge: 1                # add one extra Pod at a time during rollout
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: guestbook
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: guestbook-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001          # matches the Dockerfile's appuser
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      # Spread replicas across nodes for resilience (best-effort).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: guestbook
+      containers:
+        - name: api
+          image: guestbook:1.0.0           # built & loaded locally (see Makefile)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef: { name: app-config }
+            - secretRef:    { name: app-secret }
+          env:
+            # Downward API: inject the Pod's own name so /api/info can show which
+            # replica served the request.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          # Requests = scheduling guarantee; Limits = hard ceiling. The HPA scales
+          # on CPU measured against `requests`.
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          # Liveness: process-only. If it fails the container is RESTARTED.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness: checks Mongo. If it fails the Pod is removed from the
+          # Service endpoints (NO restart) until the dependency recovers.
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          # Startup: gives slow first-starts time before liveness kicks in.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

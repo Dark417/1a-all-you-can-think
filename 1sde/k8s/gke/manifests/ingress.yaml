@@ -1,0 +1,173 @@
+# =============================================================================
+# GKE Ingress — GCE HTTP(S) Load Balancer
+#
+# WHY replace ingress-nginx with the GCE Ingress controller?
+#   On GKE, using `kubernetes.io/ingress.class: "gce"` (or `ingressClassName:
+#   gce`) causes the GKE Ingress controller to create a Google Cloud HTTP(S)
+#   Load Balancer (GCLB).  The GCLB is managed infrastructure — you don't run
+#   a controller Pod, GCP handles availability, TLS termination, logging, and
+#   integration with Cloud CDN / Cloud Armor / IAP.
+#
+# Resources in this file:
+#   1. BackendConfig — GKE-specific CRD that configures the backend for the
+#      GCLB: health-check path, connection draining, session affinity, Cloud
+#      Armor policy, CDN settings, etc.
+#   2. Ingress (patch-style, replaces the base) — sets ingressClassName to gce
+#      and updates the host to a real domain (or uses nip.io for demos).
+#
+# Flow:
+#   Internet → GCLB (TLS optional) → BackendService → NEG (Network Endpoint
+#   Group; GKE auto-creates one per Service port) → guestbook Pods
+#
+# Network Endpoint Groups (NEGs):
+#   When using GCE Ingress with VPC-native clusters, GKE creates container-
+#   native NEGs automatically.  Traffic goes Pod-IP-direct (not through
+#   kube-proxy), which reduces latency and makes health-check results per-Pod.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. BackendConfig
+#
+# A BackendConfig is a GKE CRD (cloud.google.com/v1) that lets you configure
+# settings on the GCP BackendService that the GCE Ingress controller creates.
+# The Service annotation `cloud.google.com/backend-config` links a Service
+# port to this object.
+# -----------------------------------------------------------------------------
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: guestbook-backend-config
+  namespace: guestbook
+  labels:
+    app.kubernetes.io/part-of: guestbook
+spec:
+  # ── Health check ─────────────────────────────────────────────────────────
+  # Override the GCP BackendService health check so the GCLB probes /healthz
+  # on the app's port 8000.  Without this the GCLB uses the NodePort as both
+  # port AND health check path, which typically results in a 404 and the
+  # backend being marked unhealthy.
+  healthCheck:
+    checkIntervalSec: 15         # probe every 15 s
+    timeoutSec: 5                # wait up to 5 s for a response
+    healthyThreshold: 1          # one success to mark healthy
+    unhealthyThreshold: 2        # two failures to mark unhealthy
+    type: HTTP
+    requestPath: /healthz        # must match the liveness probe path in the Deployment
+    port: 8000                   # the container port (targetPort in the Service)
+
+  # ── Connection draining ───────────────────────────────────────────────────
+  # Wait up to 30 s for in-flight requests to finish before removing a backend
+  # (e.g., during a rolling update).  Prevents 502s on deploys.
+  connectionDraining:
+    drainingTimeoutSec: 30
+
+  # ── Session affinity ──────────────────────────────────────────────────────
+  # NONE = round-robin load balancing.  Use CLIENT_IP or GENERATED_COOKIE for
+  # sticky sessions if your app requires it.
+  sessionAffinity:
+    affinityType: "NONE"
+
+  # ── Cloud CDN (optional) ──────────────────────────────────────────────────
+  # Uncomment to enable Cloud CDN caching for static assets.
+  # cdn:
+  #   enabled: true
+  #   cachePolicy:
+  #     includeHost: true
+  #     includeProtocol: true
+  #     includeQueryString: false
+
+  # ── Cloud Armor (optional) ────────────────────────────────────────────────
+  # Attach a Cloud Armor security policy (WAF) to block OWASP Top 10 attacks.
+  # Create the policy first: `gcloud compute security-policies create guestbook-armor`
+  # securityPolicy:
+  #   name: "guestbook-armor"
+
+---
+# -----------------------------------------------------------------------------
+# 2. Ingress — applied as a PATCH (see kustomization.yaml), not a resource.
+#
+# The base (k8s/raw) already defines `Ingress/guestbook` for ingress-nginx.
+# Kustomize will NOT let two resources share an id (group/kind/name/namespace),
+# so we do not redeclare the Ingress here. Instead, kustomization.yaml carries a
+# JSON6902 patch that retargets the base Ingress to the GCE load balancer:
+#   • spec.ingressClassName: nginx -> gce
+#   • removes the nginx rewrite-target annotation
+#   • adds kubernetes.io/ingress.class: "gce"
+#   • updates the host to a real domain / nip.io
+# For static IP + Google-managed TLS, add these annotations to that patch:
+#   kubernetes.io/ingress.global-static-ip-name: "guestbook-ip"
+#   networking.gke.io/managed-certificates: "guestbook-cert"
+
+---
+# -----------------------------------------------------------------------------
+# Google-Managed TLS Certificate (optional)
+#
+# Uncomment this resource and the networking.gke.io/managed-certificates
+# annotation on the Ingress above to get automatic TLS cert provisioning.
+# Requires the host in the Ingress rules to be a real domain with DNS pointing
+# at the load balancer IP — the provisioning can take up to 30 minutes.
+# -----------------------------------------------------------------------------
+# apiVersion: networking.gke.io/v1
+# kind: ManagedCertificate
+# metadata:
+#   name: guestbook-cert
+#   namespace: guestbook
+# spec:
+#   domains:
+#     - guestbook.example.com   # must match the Ingress host and have valid DNS
+
+---
+# =============================================================================
+# GATEWAY API ALTERNATIVE
+# =============================================================================
+# The Gateway API (gateway.networking.k8s.io) is the successor to Ingress.
+# On GKE, a `gateway.networking.k8s.io/v1` Gateway with `gatewayClassName:
+# gke-l7-global-external-managed` creates the same underlying GCLB but with a
+# richer, role-oriented API (separate Gateway, HTTPRoute objects).
+#
+# Prerequisites:
+#   1. Enable Gateway API in the cluster:
+#        Terraform: uncomment the `gateway_api_config` block in main.tf
+#        gcloud:    gcloud container clusters update CLUSTER --gateway-api=standard
+#   2. Gateway API CRDs are installed automatically by GKE when enabled.
+#
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: Gateway
+# metadata:
+#   name: guestbook-gateway
+#   namespace: guestbook
+# spec:
+#   gatewayClassName: gke-l7-global-external-managed
+#   listeners:
+#     - name: http
+#       protocol: HTTP
+#       port: 80
+#     # HTTPS listener — requires a certificate reference
+#     # - name: https
+#     #   protocol: HTTPS
+#     #   port: 443
+#     #   tls:
+#     #     mode: Terminate
+#     #     certificateRefs:
+#     #       - name: guestbook-tls
+# ---
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: HTTPRoute
+# metadata:
+#   name: guestbook
+#   namespace: guestbook
+# spec:
+#   parentRefs:
+#     - name: guestbook-gateway
+#       namespace: guestbook
+#   hostnames:
+#     - "guestbook.example.com"   # PLACEHOLDER
+#   rules:
+#     - matches:
+#         - path:
+#             type: PathPrefix
+#             value: /
+#       backendRefs:
+#         - name: guestbook
+#           port: 80
+# =============================================================================

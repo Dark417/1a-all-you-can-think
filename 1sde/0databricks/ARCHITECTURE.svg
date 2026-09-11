@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" width="1240" height="900" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="1240" height="900" fill="#ffffff"/>
+
+  <text x="620" y="36" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">EDGAR lakehouse — how it fits together</text>
+  <text x="620" y="60" text-anchor="middle" font-size="13" fill="#64748b">Six repositories. Data flows left to right; nothing flows back.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1d4ed8"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#15803d"/></marker>
+  </defs>
+
+  <!-- ===== row 1: the pipeline ===== -->
+  <text x="30" y="96" font-size="14" font-weight="700" fill="#0f172a">1 · The data pipeline</text>
+
+  <rect x="30" y="110" width="150" height="72" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="105" y="134" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">SEC EDGAR</text>
+  <text x="105" y="152" text-anchor="middle" font-size="11" fill="#475569">filings + XBRL</text>
+  <text x="105" y="168" text-anchor="middle" font-size="11" fill="#475569">public source</text>
+
+  <rect x="215" y="110" width="150" height="72" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="290" y="130" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">3 · ingest</text>
+  <text x="290" y="148" text-anchor="middle" font-size="11" fill="#475569">ECS batch, rate-limited</text>
+  <text x="290" y="164" text-anchor="middle" font-size="11" fill="#475569">→ S3 raw (immutable)</text>
+
+  <rect x="400" y="110" width="205" height="72" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="502" y="130" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">4 · pipelines (Databricks)</text>
+  <text x="502" y="150" text-anchor="middle" font-size="11" fill="#475569">bronze → silver → gold</text>
+  <text x="502" y="166" text-anchor="middle" font-size="11" fill="#475569">MERGE, SCD-2, DQ, quarantine</text>
+
+  <rect x="640" y="110" width="165" height="72" rx="8" fill="#ecfdf5" stroke="#15803d" stroke-width="2"/>
+  <text x="722" y="130" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">gold tables</text>
+  <text x="722" y="148" text-anchor="middle" font-size="11" fill="#166534">company_profile · financials</text>
+  <text x="722" y="164" text-anchor="middle" font-size="11" fill="#166534">restatement_event · activity</text>
+
+  <rect x="840" y="110" width="170" height="72" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="925" y="130" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Parquet export</text>
+  <text x="925" y="148" text-anchor="middle" font-size="11" fill="#475569">point-in-time snapshot</text>
+  <text x="925" y="164" text-anchor="middle" font-size="11" fill="#475569">read by 5 and 6</text>
+
+  <rect x="1045" y="110" width="165" height="72" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="1127" y="130" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">5 · serving</text>
+  <text x="1127" y="148" text-anchor="middle" font-size="11" fill="#475569">REST API + web UI</text>
+  <text x="1127" y="164" text-anchor="middle" font-size="11" fill="#475569">not built yet</text>
+
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M180 146 H211"/><path d="M365 146 H396"/><path d="M605 146 H636"/>
+    <path d="M805 146 H836"/><path d="M1010 146 H1041"/>
+  </g>
+
+  <!-- contracts + infra as cross-cutting -->
+  <rect x="215" y="205" width="390" height="46" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="410" y="224" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1e3a8a">1 · contracts — the shared schema every repo pins</text>
+  <text x="410" y="241" text-anchor="middle" font-size="11" fill="#1e40af">Liquibase migrations + Python schemas, reconciled by a drift test</text>
+
+  <rect x="640" y="205" width="370" height="46" rx="8" fill="#fff7ed" stroke="#c2410c" stroke-width="2"/>
+  <text x="825" y="224" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7c2d12">2 · infra — Terraform for AWS + the Databricks workspace</text>
+  <text x="825" y="241" text-anchor="middle" font-size="11" fill="#9a3412">S3, IAM/SSO, ECS, SSM parameters, Bedrock access</text>
+
+  <line x1="30" y1="278" x2="1210" y2="278" stroke="#e2e8f0" stroke-width="2"/>
+
+  <!-- ===== row 2: repo 6 internals ===== -->
+  <text x="30" y="308" font-size="14" font-weight="700" fill="#0f172a">2 · Inside repo 6 — the chatbot (this is the part with a choice in it)</text>
+
+  <rect x="30" y="326" width="170" height="60" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="115" y="350" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Streamlit UI</text>
+  <text x="115" y="368" text-anchor="middle" font-size="11" fill="#475569">chat + tool trace</text>
+
+  <rect x="30" y="400" width="170" height="76" rx="8" fill="#fefce8" stroke="#a16207" stroke-width="2"/>
+  <text x="115" y="422" text-anchor="middle" font-size="12.5" font-weight="700" fill="#713f12">sidebar toggle</text>
+  <text x="115" y="441" text-anchor="middle" font-size="11" fill="#854d0e">langgraph ⇄ adk</text>
+  <text x="115" y="459" text-anchor="middle" font-size="11" fill="#854d0e">switches at runtime</text>
+
+  <!-- two runners -->
+  <rect x="245" y="318" width="250" height="80" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="370" y="341" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">A · LangGraph runner</text>
+  <text x="370" y="360" text-anchor="middle" font-size="11" fill="#1e40af">explicit graph, typed state</text>
+  <text x="370" y="377" text-anchor="middle" font-size="11" fill="#1e40af">route → plan → execute → verify</text>
+  <text x="370" y="392" text-anchor="middle" font-size="10.5" font-style="italic" fill="#3b82f6">default</text>
+
+  <rect x="245" y="412" width="250" height="80" rx="8" fill="#faf5ff" stroke="#7e22ce" stroke-width="2"/>
+  <text x="370" y="435" text-anchor="middle" font-size="13" font-weight="700" fill="#581c87">B · Google ADK runner</text>
+  <text x="370" y="454" text-anchor="middle" font-size="11" fill="#6b21a8">framework-managed agent loop</text>
+  <text x="370" y="471" text-anchor="middle" font-size="11" fill="#6b21a8">same tools, via LiteLLM → Bedrock</text>
+  <text x="370" y="486" text-anchor="middle" font-size="10.5" font-style="italic" fill="#9333ea">alternative</text>
+
+  <text x="370" y="512" text-anchor="middle" font-size="11" fill="#64748b">Both satisfy one interface, so they are swappable and separately tested.</text>
+
+  <!-- guardrails -->
+  <rect x="540" y="318" width="180" height="90" rx="8" fill="#fef2f2" stroke="#b91c1c" stroke-width="2"/>
+  <text x="630" y="340" text-anchor="middle" font-size="13" font-weight="700" fill="#7f1d1d">guardrails</text>
+  <text x="630" y="359" text-anchor="middle" font-size="11" fill="#991b1b">scope + advice refusal</text>
+  <text x="630" y="375" text-anchor="middle" font-size="11" fill="#991b1b">injection: data ≠ orders</text>
+  <text x="630" y="391" text-anchor="middle" font-size="11" fill="#991b1b">rate limit + budget cap</text>
+
+  <rect x="540" y="422" width="180" height="70" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="630" y="444" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Bedrock</text>
+  <text x="630" y="462" text-anchor="middle" font-size="11" fill="#475569">Claude Sonnet 4.5</text>
+  <text x="630" y="479" text-anchor="middle" font-size="11" fill="#475569">probed, Nova fallback</text>
+
+  <!-- tools + duckdb -->
+  <rect x="765" y="318" width="215" height="90" rx="8" fill="#ecfdf5" stroke="#15803d" stroke-width="2"/>
+  <text x="872" y="340" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">tool layer</text>
+  <text x="872" y="359" text-anchor="middle" font-size="11" fill="#166534">typed functions, fixed SQL</text>
+  <text x="872" y="375" text-anchor="middle" font-size="11" fill="#166534">search · profile · financials</text>
+  <text x="872" y="391" text-anchor="middle" font-size="11" fill="#166534">restatements · coverage</text>
+
+  <rect x="765" y="422" width="215" height="70" rx="8" fill="#ecfdf5" stroke="#15803d" stroke-width="2"/>
+  <text x="872" y="444" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">DuckDB over Parquet</text>
+  <text x="872" y="462" text-anchor="middle" font-size="11" fill="#166534">local, read-only</text>
+  <text x="872" y="479" text-anchor="middle" font-size="11" fill="#166534">no Databricks at runtime</text>
+
+  <rect x="1015" y="318" width="195" height="174" rx="8" fill="#f8fafc" stroke="#0f172a" stroke-width="2"/>
+  <text x="1112" y="342" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">The one rule</text>
+  <text x="1112" y="368" text-anchor="middle" font-size="12" fill="#0f172a">The model chooses</text>
+  <text x="1112" y="386" text-anchor="middle" font-size="12" fill="#0f172a">WHICH question.</text>
+  <text x="1112" y="410" text-anchor="middle" font-size="12" font-weight="700" fill="#b91c1c">SQL computes</text>
+  <text x="1112" y="428" text-anchor="middle" font-size="12" font-weight="700" fill="#b91c1c">every number.</text>
+  <text x="1112" y="456" text-anchor="middle" font-size="11" fill="#475569">It never sums, ranks,</text>
+  <text x="1112" y="472" text-anchor="middle" font-size="11" fill="#475569">or converts. Each answer</text>
+  <text x="1112" y="488" text-anchor="middle" font-size="11" fill="#475569">shows its tool trace.</text>
+
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M200 356 H241"/>
+    <path d="M200 438 H241"/>
+  </g>
+  <g stroke="#1d4ed8" stroke-width="2" fill="none" marker-end="url(#ab)">
+    <path d="M495 358 H536"/>
+    <path d="M495 452 H536"/>
+  </g>
+  <g stroke="#15803d" stroke-width="2" fill="none" marker-end="url(#ag)">
+    <path d="M720 363 H761"/>
+    <path d="M872 408 V418"/>
+  </g>
+
+  <line x1="30" y1="536" x2="1210" y2="536" stroke="#e2e8f0" stroke-width="2"/>
+
+  <!-- ===== row 3: a question end to end ===== -->
+  <text x="30" y="566" font-size="14" font-weight="700" fill="#0f172a">3 · One question, end to end</text>
+
+  <rect x="30" y="584" width="1180" height="112" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="50" y="608" font-size="12" font-style="italic" fill="#334155">"Which company had the biggest material restatement?"</text>
+
+  <text x="50" y="634" font-size="11.5" fill="#0f172a"><tspan font-weight="700">1.</tspan> guardrails: in scope, not advice, within rate limit</text>
+  <text x="50" y="654" font-size="11.5" fill="#0f172a"><tspan font-weight="700">2.</tspan> model picks the tool <tspan font-family="Consolas, monospace" fill="#15803d">get_restatements(materiality_band="material")</tspan> — it does not decide the answer</text>
+  <text x="50" y="674" font-size="11.5" fill="#0f172a"><tspan font-weight="700">3.</tspan> DuckDB runs fixed SQL, orders by <tspan font-family="Consolas, monospace" fill="#15803d">abs(delta_pct)</tspan>, returns rows with units, periods and accession numbers</text>
+  <text x="50" y="690" font-size="11.5" fill="#0f172a"><tspan font-weight="700">4.</tspan> model writes prose around figures it did not compute; UI shows the trace so any answer can be checked</text>
+
+  <!-- footer -->
+  <text x="30" y="736" font-size="12" font-weight="700" fill="#0f172a">Why it is built this way</text>
+  <text x="30" y="758" font-size="11.5" fill="#334155">• <tspan font-weight="600">Generated SQL is dangerous here.</tspan> financial_fact is bitemporal: a query that forgets period_type compares a quarter to a year, and one that</text>
+  <text x="42" y="775" font-size="11.5" fill="#334155">forgets the asserting accession double-counts a restated fact. Neither errors — both return a plausible wrong number. Fixed tools encode those joins once.</text>
+  <text x="30" y="797" font-size="11.5" fill="#334155">• <tspan font-weight="600">No live warehouse dependency.</tspan> Databricks Free Edition shuts compute down on quota. The chatbot reads an exported snapshot, so that cannot take the demo down.</text>
+  <text x="30" y="819" font-size="11.5" fill="#334155">• <tspan font-weight="600">No RAG, no vector store.</tspan> The data is structured and numeric — retrieval is a WHERE clause. Embeddings would make an exact operation approximate.</text>
+  <text x="30" y="841" font-size="11.5" fill="#334155">• <tspan font-weight="600">Two runners on purpose.</tspan> The tools are the asset; the framework is a detail. Building both proves the seam is real rather than asserted.</text>
+
+  <text x="30" y="876" font-size="11" fill="#64748b">Portfolio project on Databricks Free Edition — not licensed for commercial use. Not investment advice. materiality_band is a product heuristic, not an accounting standard.</text>
+</svg>

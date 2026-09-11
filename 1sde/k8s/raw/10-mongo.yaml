@@ -1,0 +1,99 @@
+# =============================================================================
+# MongoDB as a StatefulSet -- the canonical way to run *stateful* workloads.
+#
+# Why StatefulSet (not Deployment)?
+#   * Stable, sticky network identity: pods are mongo-0, mongo-1, ... and keep
+#     their name across reschedules.
+#   * Stable storage: each Pod gets its OWN PersistentVolumeClaim from the
+#     volumeClaimTemplate, and it is re-attached to the same Pod name on restart.
+#   * Ordered, graceful rollout.
+#
+# This single-replica demo is fine locally. For production HA you would run a
+# 3-member replica set (see mongodb/docker-compose.yml for the replica-set idea,
+# or use the MongoDB Community/Enterprise Operator on a real cluster).
+# =============================================================================
+
+# Credentials live in a Secret (base64, not encryption -- use a real secrets
+# manager in production; see eks/ and gke/ for IRSA / Workload Identity + CSI).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongo-auth
+  namespace: guestbook
+type: Opaque
+stringData:                      # stringData is auto-base64-encoded by the API server
+  MONGO_INITDB_ROOT_USERNAME: "root"
+  MONGO_INITDB_ROOT_PASSWORD: "example-change-me"
+---
+# A *headless* Service (clusterIP: None) gives each StatefulSet Pod a stable DNS
+# name: mongo-0.mongo.guestbook.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: guestbook
+  labels: { app: mongo }
+spec:
+  clusterIP: None
+  selector: { app: mongo }
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: guestbook
+spec:
+  serviceName: mongo            # must match the headless Service name
+  replicas: 1
+  selector:
+    matchLabels: { app: mongo }
+  template:
+    metadata:
+      labels: { app: mongo }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999          # the `mongodb` user in the official image
+        fsGroup: 999            # so the mounted volume is writable
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          args: ["--bind_ip_all"]
+          ports:
+            - containerPort: 27017
+              name: mongo
+          envFrom:
+            - secretRef: { name: mongo-auth }
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: "1",  memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          # Liveness: restart the container if mongod stops answering.
+          livenessProbe:
+            exec: { command: ["mongosh", "--eval", "db.adminCommand('ping')"] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          # Readiness: only route traffic once mongod accepts connections.
+          readinessProbe:
+            exec: { command: ["mongosh", "--eval", "db.adminCommand('ping')"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  # Each replica gets its own 1Gi volume from the default StorageClass.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

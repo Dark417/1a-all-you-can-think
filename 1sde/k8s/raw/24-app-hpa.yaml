@@ -1,0 +1,41 @@
+# --- HorizontalPodAutoscaler: scale replicas on observed load. ---
+# Requires the metrics-server (kind: `kubectl apply -f` the metrics-server, or
+# minikube: `minikube addons enable metrics-server`). The HPA reads CPU usage as
+# a % of each Pod's CPU *request* (100m here) and adjusts replica count to keep
+# the average near the target.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: guestbook
+  namespace: guestbook
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: guestbook
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120   # avoid flapping: wait before scaling in
+---
+# --- PodDisruptionBudget: protect availability during *voluntary* disruptions ---
+# (node drains, cluster upgrades). Kubernetes will not evict Pods if doing so
+# would drop ready replicas below minAvailable.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: guestbook
+  namespace: guestbook
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: guestbook

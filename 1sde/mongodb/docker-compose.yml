@@ -1,0 +1,151 @@
+# =============================================================================
+# MongoDB single-node replica set for local development and examples.
+#
+# WHY a replica set even for local dev?
+#   * Multi-document ACID transactions require a replica set (the distributed
+#     commit protocol lives inside the replication machinery).
+#   * Change streams are built on the oplog, which only exists with replication.
+#   * A single-node replica set ("rs0" with one member) provides both features
+#     at near-zero overhead.
+#
+# Services
+# --------
+#   mongo       - mongod 7.0, started with --replSet rs0 (waits for init)
+#   mongo-init  - one-shot busybox container that calls rs.initiate() once
+#   mongo-express - optional web UI at http://localhost:8081
+#
+# Usage
+# -----
+#   docker compose up -d
+#   # wait ~10 s, then:
+#   docker compose exec mongo mongosh --eval "rs.status()"
+#
+# Tear down (keeps data volume):
+#   docker compose down
+#
+# Tear down AND wipe data:
+#   docker compose down -v
+# =============================================================================
+
+version: "3.9"   # minimum version that supports healthchecks and named volumes
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Primary MongoDB node — started as a single-member replica set "rs0".
+  #
+  # --replSet rs0        : enable replication and join the named set
+  # --bind_ip_all        : listen on all interfaces (safe inside Docker network)
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7.0
+    container_name: mongo-rs0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      # Expose 27017 on the host so Python examples can connect with
+      # mongodb://localhost:27017/?replicaSet=rs0
+      - "27017:27017"
+    volumes:
+      # Named volume keeps data between `docker compose down` restarts.
+      # Use `docker compose down -v` to wipe it.
+      - mongo_data:/data/db
+      # Mount the mongosh scripts so you can run them inside the container:
+      #   docker compose exec mongo mongosh < /mongosh/sample-queries.js
+      - ./mongosh:/mongosh:ro
+    networks:
+      - mongo_net
+    healthcheck:
+      # mongosh --eval returns exit-code 0 when mongod is up and answering.
+      # The replica-set is NOT necessarily initiated yet at this point —
+      # mongo-init takes care of that.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # One-shot init container: waits until mongod is healthy, then calls
+  # rs.initiate() to form the replica set.
+  #
+  # We use the official mongo image (which ships mongosh) rather than busybox
+  # to avoid installing extra tools.
+  # ---------------------------------------------------------------------------
+  mongo-init:
+    image: mongo:7.0
+    container_name: mongo-rs0-init
+    # This command:
+    #   1. Waits until mongod passes the ping check (it might be starting up).
+    #   2. Calls rs.initiate() using the container's own hostname (mongo-rs0).
+    #   3. Exits 0 so Docker marks it as "completed", not "failed".
+    command: >
+      bash -c "
+        echo 'Waiting for mongod to be ready...';
+        until mongosh --host mongo --quiet --eval 'db.adminCommand(\"ping\").ok' 2>/dev/null | grep -q 1; do
+          echo '  still waiting...'; sleep 2;
+        done;
+        echo 'mongod is up — initiating replica set rs0';
+        mongosh --host mongo --eval '
+          try {
+            rs.initiate({
+              _id: \"rs0\",
+              members: [{ _id: 0, host: \"mongo:27017\" }]
+            });
+            print(\"rs.initiate() succeeded\");
+          } catch(e) {
+            if (e.codeName === \"AlreadyInitialized\") {
+              print(\"replica set already initialized — nothing to do\");
+            } else {
+              print(\"rs.initiate() error: \" + e);
+              quit(1);
+            }
+          }
+        ';
+        echo 'Replica set init done.';
+      "
+    depends_on:
+      mongo:
+        condition: service_healthy  # wait for the healthcheck above to pass
+    networks:
+      - mongo_net
+    restart: "no"  # one-shot: run once and exit
+
+  # ---------------------------------------------------------------------------
+  # Mongo Express — a lightweight browser-based admin UI.
+  #
+  # Open http://localhost:8081 to browse databases, run ad-hoc queries, and
+  # inspect documents visually.
+  #
+  # ME_CONFIG_MONGODB_URL  : connection string (uses Docker service name "mongo")
+  # ME_CONFIG_BASICAUTH    : set to "false" to skip browser login prompt locally
+  # ---------------------------------------------------------------------------
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: "mongodb://mongo:27017/?replicaSet=rs0"
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - mongo_net
+    restart: unless-stopped
+
+# =============================================================================
+# Named volume: data survives `docker compose down` restarts.
+# =============================================================================
+volumes:
+  mongo_data:
+    driver: local
+
+# =============================================================================
+# Dedicated bridge network so services can resolve each other by name
+# (mongo, mongo-express) without exposing everything to the host network.
+# =============================================================================
+networks:
+  mongo_net:
+    driver: bridge

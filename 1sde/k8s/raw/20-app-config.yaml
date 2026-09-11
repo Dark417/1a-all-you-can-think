@@ -1,0 +1,33 @@
+# --- ConfigMap: non-secret configuration, decoupled from the image. ---
+# Changing these does not require rebuilding the container -- only a rollout.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: guestbook
+data:
+  MONGODB_DB: "guestbook"
+  APP_VERSION: "1.0.0"
+---
+# --- Secret: the MongoDB connection string (contains the password). ---
+# Kept separate from the ConfigMap so RBAC can restrict who reads Secrets.
+# authSource=admin because the root user is defined in the admin database.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: guestbook
+type: Opaque
+stringData:
+  MONGODB_URI: "mongodb://root:example-change-me@mongo:27017/guestbook?authSource=admin"
+---
+# --- ServiceAccount: the identity the app Pods run as. ---
+# In raw Kubernetes it grants no extra permissions; in eks/ and gke/ this same
+# ServiceAccount is annotated to assume a cloud IAM role (IRSA / Workload
+# Identity) so the app can reach cloud services WITHOUT static credentials.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: guestbook-app
+  namespace: guestbook
+automountServiceAccountToken: false   # the app doesn't talk to the K8s API

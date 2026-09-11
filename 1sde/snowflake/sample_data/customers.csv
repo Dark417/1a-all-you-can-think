@@ -1,0 +1,4 @@
+id,name,profile
+101,Alice,{"tier":"gold"}
+102,Bob,{"tier":"silver"}
+103,Carol,{"tier":"bronze"}

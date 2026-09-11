@@ -1,0 +1,131 @@
+# =============================================================================
+# Kustomize overlay for AWS EKS.
+#
+# This overlay takes the vanilla manifests in ../../raw as its base and applies
+# AWS-specific changes WITHOUT forking any base files. The base stays DRY;
+# this overlay is the single authoritative list of "what's different on EKS".
+#
+# Changes vs. the base (raw/):
+#   1. StorageClass   -- add a gp3 StorageClass (EBS CSI); patch MongoDB PVC to use it.
+#   2. Ingress        -- replace nginx ingress with ALB (AWS Load Balancer Controller).
+#   3. ServiceAccount -- annotate guestbook-app SA with the IRSA role ARN.
+#   4. Image          -- point to the ECR repository instead of local image name.
+#   5. NetworkPolicy  -- relax the ingress-controller allow rule: on EKS the ALB
+#                        Controller targets pod IPs directly (no namespace selector
+#                        trick needed; the rule still allows any namespace, which is
+#                        fine because pods are in private subnets behind the ALB).
+#
+# Apply with:
+#   kubectl apply -k k8s/eks/manifests
+#
+# Preview with:
+#   kubectl diff -k k8s/eks/manifests
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ---------------------------------------------------------------------------
+# Base: the vanilla Kubernetes manifests. All resources defined there are
+# included unless explicitly removed in `patches` below.
+# ---------------------------------------------------------------------------
+resources:
+  - ../../raw          # pulls in all 10 manifests from raw/kustomization.yaml
+  - storageclass.yaml  # new: gp3 StorageClass (not in the base)
+
+# ---------------------------------------------------------------------------
+# Image override: replace the local image name with the ECR URI.
+# TODO: Replace ACCOUNT_ID and REGION with real values after pushing to ECR.
+#       The tag should match what you pushed (e.g. 1.0.0).
+# ---------------------------------------------------------------------------
+images:
+  - name: guestbook:1.0.0
+    # newName points to your ECR repository URL.
+    # Get it with: aws ecr describe-repositories --repository-names guestbook
+    # Or: terraform output ecr_repository_url
+    newName: TODO_ACCOUNT_ID.dkr.ecr.TODO_REGION.amazonaws.com/guestbook
+    newTag: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Patches: targeted changes to base resources.
+# Modern Kustomize syntax uses `patches:` with a `target:` selector and either
+# a `patch:` inline (strategic-merge or JSON6902) or `path:` to a file.
+# ---------------------------------------------------------------------------
+patches:
+  # ---------------------------------------------------------------------------
+  # Patch 1: Ingress -- swap nginx class + annotations for ALB.
+  # Strategy: replace the entire Ingress spec (the base host/class/annotations
+  # are all nginx-specific and not useful on EKS).
+  # ---------------------------------------------------------------------------
+  - path: ingress.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: guestbook
+      namespace: guestbook
+  # Strip the nginx-only annotation inherited from the base (strategic-merge
+  # cannot delete a map key reliably, so use an explicit JSON6902 remove).
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: guestbook
+      namespace: guestbook
+    patch: |
+      - op: remove
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1rewrite-target
+
+  # ---------------------------------------------------------------------------
+  # Patch 2: ServiceAccount -- add IRSA role-arn annotation.
+  # Strategy: strategic-merge (adds the annotation without removing others).
+  # ---------------------------------------------------------------------------
+  - path: serviceaccount-patch.yaml
+    target:
+      version: v1
+      kind: ServiceAccount
+      name: guestbook-app
+      namespace: guestbook
+
+  # ---------------------------------------------------------------------------
+  # Patch 3: MongoDB StatefulSet volumeClaimTemplate -- use gp3 StorageClass.
+  # Strategy: JSON 6902 patch to set spec.volumeClaimTemplates[0].spec.storageClassName.
+  # WHY JSON6902 here?  Strategic-merge cannot target items inside arrays by
+  # index on some Kustomize versions (volumeClaimTemplates is not a named list).
+  # ---------------------------------------------------------------------------
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: mongo
+      namespace: guestbook
+    patch: |
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: gp3
+
+  # ---------------------------------------------------------------------------
+  # Patch 4: Deployment imagePullPolicy -- on EKS images come from ECR so we
+  # use Always to ensure the correct digest is always pulled.
+  # (The base uses IfNotPresent which is fine for local development.)
+  # ---------------------------------------------------------------------------
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: guestbook
+      namespace: guestbook
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+
+# ---------------------------------------------------------------------------
+# Common labels: stamp every object with an overlay identifier so you can
+# quickly distinguish EKS objects from a base or GKE deployment.
+# ---------------------------------------------------------------------------
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/part-of: guestbook
+      demo: kubernetes-mongodb
+      overlay: eks
