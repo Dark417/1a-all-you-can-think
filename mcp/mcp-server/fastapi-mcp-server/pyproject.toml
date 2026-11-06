@@ -1,0 +1,16 @@
+[project]
+name = "fastapi-mcp-server"
+version = "0.1.0"
+description = "MCP server built with the official Python MCP SDK, mounted inside a FastAPI app."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162",
+    "uvicorn[standard]>=0.54",
+    "mcp>=2.3,<3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

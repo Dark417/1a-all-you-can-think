@@ -1,0 +1,35 @@
+[project]
+name = "mcp-client"
+version = "0.1.0"
+description = "One FastAPI app, six agent frameworks, one MCP server: compare how each framework consumes MCP."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162",
+    "uvicorn[standard]>=0.54",
+    "pydantic-settings>=2.6",
+    "mcp>=1.24,<2",  # langchain-mcp-adapters (and agentcore[strands]) still require mcp<2
+    # LangGraph
+    "langgraph>=1.2",
+    "langchain>=1.4",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-anthropic>=1.7",
+    # Google ADK + Vertex AI (google-genai)
+    "google-adk>=2.13",
+    "google-genai>=2.34",
+    # AWS Strands + AgentCore
+    "strands-agents>=1.63",
+    "bedrock-agentcore>=1.25",
+    # Anthropic (Claude API) + Claude Agent SDK
+    "anthropic[mcp]>=2.4",
+    "claude-agent-sdk>=0.2",
+    # OpenAI Agents SDK
+    "openai-agents>=0.24",
+    "python-dotenv>=1.2.4",
+    "httpx>=0.28.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

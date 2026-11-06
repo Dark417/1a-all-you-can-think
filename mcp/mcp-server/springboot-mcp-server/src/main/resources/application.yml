@@ -1,0 +1,15 @@
+server:
+  port: 8002
+
+spring:
+  application:
+    name: springboot-mcp-server
+  ai:
+    mcp:
+      server:
+        name: demo-mcp-springboot
+        version: 0.1.0
+        type: sync              # sync (servlet threads) or async (Reactor); WebMVC pairs with sync
+        protocol: stateless     # Streamable HTTP without server-side sessions, like FastAPI's stateless_http=True
+        streamable-http:
+          mcp-endpoint: /mcp
